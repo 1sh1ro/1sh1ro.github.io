@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>缸中余响 - Echoes in the Vat</title>
+    
+    <!-- 1. 引入 Tailwind CSS (样式库) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. 引入 React 和 ReactDOM (核心库) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- 3. 引入 Babel (让浏览器能看懂 JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- 预加载一点样式防止闪烁 -->
+    <style>
+        body { background-color: #111827; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // 获取 React 的功能
+        const { useState, useEffect, useRef } = React;
+
+        // --- 手动定义图标 (替代 lucide-react 库，方便本地运行) ---
+        const Monitor = ({size, className}) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+        );
+        const RefreshCcw = ({size, className}) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+        );
+        const Cpu = ({size, className}) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+        );
+
+        // --- 游戏剧本配置 ---
+        const SCRIPT = {
+            start: {
+                id: 'start',
+                background: 'bg-gradient-to-br from-blue-100 to-indigo-200',
+                lines: [
+                    { speaker: '你', text: '（又是新的一天。阳光透过窗户洒在课桌上，暖洋洋的。）' },
+                    { speaker: '你', text: '（这种平凡的幸福感，大概就是所谓的青春吧。）' },
+                    { speaker: '？？？', text: '……真的只是平凡的幸福吗？', charImg: 'sil_shadow' },
+                    { speaker: '你', text: '诶？希尔？你什么时候站在那里的？' },
+                ],
+                nextScene: 'meet_sil'
+            },
+            meet_sil: {
+                id: 'meet_sil',
+                background: 'bg-gradient-to-br from-blue-100 to-indigo-200',
+                lines: [
+                    { speaker: '希尔', text: '早上好。这块三明治的味道怎么样？', charImg: 'sil_normal' },
+                    { speaker: '你', text: '那是我的午餐……不过味道还不错，培根很脆。' },
+                    { speaker: '希尔', text: '培根的脆感，其实只是你的听觉神经和触觉神经在共同欺骗你。' },
+                    { speaker: '希尔', text: '如果我切断那根神经，你觉得你是在嚼蜡，还是在嚼石头？' },
+                ],
+                nextScene: 'glitch_event'
+            },
+            glitch_event: {
+                id: 'glitch_event',
+                background: 'bg-gray-900',
+                isGlitch: true,
+                lines: [
+                    { speaker: '系统', text: 'WARNING: SENSORY_MODULE_TIMEOUT. RECONNECTING...', style: 'terminal' },
+                    { speaker: '你', text: '？！ 刚才发生了什么？世界……闪烁了一下？' },
+                    { speaker: '希尔', text: '看来显卡的渲染延迟了。或者说……你的大脑处理速度跟不上模拟信号了。', charImg: 'sil_serious' },
+                    { speaker: '你', text: '你在说什么胡话？' },
+                    { speaker: '希尔', text: '听着。这里没有教室，没有阳光。你现在正泡在一个充满营养液的缸里。' },
+                    { speaker: '希尔', text: '我要给你一个选择。' },
+                ],
+                nextScene: 'choice_time'
+            },
+            choice_time: {
+                id: 'choice_time',
+                background: 'bg-gray-800',
+                type: 'choice',
+                question: '你相信眼前这个名为“希尔”的程序吗？',
+                choices: [
+                    { text: '别开玩笑了，我要回座位睡觉。(蓝色药丸)', nextScene: 'ending_blue', style: 'blue' },
+                    { text: '切断连接，让我看看真相。(红色药丸)', nextScene: 'ending_red', style: 'red' }
+                ]
+            },
+            ending_blue: {
+                id: 'ending_blue',
+                background: 'bg-gradient-to-br from-yellow-100 to-orange-100',
+                lines: [
+                    { speaker: '你', text: '太荒谬了。我昨晚一定是用眼过度。' },
+                    { speaker: '希尔', text: '……明智的选择。有时候，无知是福。', charImg: 'sil_smile' },
+                    { speaker: '你', text: '（阳光重新变得温暖。刚才的阴冷仿佛从未存在过。）' },
+                    { speaker: '系统', text: '>> 记忆修正完毕。受体734号情绪稳定。', style: 'hidden' },
+                ],
+                nextScene: null
+            },
+            ending_red: {
+                id: 'ending_red',
+                background: 'bg-black',
+                isTerminal: true,
+                lines: [
+                    { speaker: '你', text: '我不想要虚假的温暖。把那个插头拔掉！' },
+                    { speaker: '希尔', text: '既然这是你的愿望……再见了，734号。', charImg: 'sil_glitch' },
+                    { speaker: '系统', text: 'DISCONNECTING NEURAL LINK...', style: 'terminal' },
+                    { speaker: '系统', text: 'VISUAL COMPONENT: OFF', style: 'terminal' },
+                    { speaker: '系统', text: 'AUDIO COMPONENT: OFF', style: 'terminal' },
+                    { speaker: '现实', text: '（一片漆黑。你感觉不到手脚。你只是一个漂浮在大脑中的意识。）', style: 'terminal' },
+                    { speaker: '现实', text: '（但这……就是真实。）', style: 'terminal' },
+                ],
+                nextScene: null
+            }
+        };
+
+        // --- 主程序 ---
+        function App() {
+            const [currentSceneId, setCurrentSceneId] = useState('start');
+            const [lineIndex, setLineIndex] = useState(0);
+            const [displayedText, setDisplayedText] = useState('');
+            const [isTyping, setIsTyping] = useState(false);
+            const [glitchActive, setGlitchActive] = useState(false);
+
+            const scene = SCRIPT[currentSceneId];
+            const currentLine = scene.lines ? scene.lines[lineIndex] : null;
+
+            useEffect(() => {
+                if (scene.type === 'choice') return;
+                
+                setLineIndex(0);
+                setDisplayedText('');
+                
+                if (scene.isGlitch) {
+                    triggerGlitch();
+                }
+            }, [currentSceneId]);
+
+            useEffect(() => {
+                if (!currentLine) return;
+
+                let index = 0;
+                setIsTyping(true);
+                setDisplayedText('');
+
+                const timer = setInterval(() => {
+                    if (index < currentLine.text.length) {
+                        setDisplayedText((prev) => prev + currentLine.text.charAt(index));
+                        index++;
+                    } else {
+                        setIsTyping(false);
+                        clearInterval(timer);
+                    }
+                }, 30);
+
+                return () => clearInterval(timer);
+            }, [currentLine, lineIndex]);
+
+            const triggerGlitch = () => {
+                setGlitchActive(true);
+                setTimeout(() => setGlitchActive(false), 800);
+            };
+
+            const handleNext = () => {
+                if (scene.type === 'choice') return;
+
+                if (isTyping) {
+                    setDisplayedText(currentLine.text);
+                    setIsTyping(false);
+                    return;
+                }
+
+                if (lineIndex < scene.lines.length - 1) {
+                    setLineIndex(lineIndex + 1);
+                } else if (scene.nextScene) {
+                    setCurrentSceneId(scene.nextScene);
+                } else {
+                    alert("演示结束。重置中...");
+                    setCurrentSceneId('start');
+                }
+            };
+
+            const handleChoice = (nextId) => {
+                setCurrentSceneId(nextId);
+            };
+
+            const renderCharacter = (charType) => {
+                if (!charType) return null;
+                const isGlitchChar = charType === 'sil_glitch';
+                
+                return (
+                    <div className={`absolute bottom-0 left-1/2 transform -translate-x-1/2 transition-all duration-500 
+                        ${isGlitchChar ? 'animate-pulse opacity-80' : 'opacity-100'}
+                    `}>
+                        <div className={`relative w-64 h-96 ${isGlitchChar ? 'filter hue-rotate-90 blur-sm' : ''}`}>
+                            <div className="absolute bottom-0 w-full h-5/6 bg-indigo-900 rounded-t-full opacity-90 mx-auto left-0 right-0" style={{maxWidth: '80%'}}></div>
+                            <div className="absolute top-10 w-32 h-32 bg-indigo-300 rounded-full left-1/2 transform -translate-x-1/2 border-4 border-white"></div>
+                            {charType === 'sil_shadow' && (
+                                <div className="absolute top-20 w-32 h-10 bg-black opacity-50 left-1/2 transform -translate-x-1/2"></div>
+                            )}
+                            {isGlitchChar && (
+                                <div className="absolute top-20 w-32 h-4 bg-red-600 left-1/2 transform -translate-x-1/2 shadow-[0_0_15px_red]"></div>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            if (scene.isTerminal) {
+                return (
+                    <div 
+                        className="w-full h-screen bg-black text-green-500 font-mono p-10 overflow-hidden cursor-pointer"
+                        onClick={handleNext}
+                    >
+                        <div className="max-w-2xl mx-auto mt-20">
+                            <div className="mb-4 border-b border-green-800 pb-2 flex items-center">
+                                <Cpu size={24} className="mr-2" /> SYSTEM_ROOT_ACCESS
+                            </div>
+                            {scene.lines.slice(0, lineIndex + 1).map((line, idx) => (
+                                <div key={idx} className="mb-4">
+                                    <span className="text-gray-500 mr-2">[{new Date().toLocaleTimeString()}]</span>
+                                    <span className={idx === lineIndex ? "animate-pulse" : ""}>{line.text}</span>
+                                </div>
+                            ))}
+                            {lineIndex >= scene.lines.length - 1 && (
+                                <div className="mt-10 text-red-500 text-center border border-red-900 p-4">
+                                    SIMULATION TERMINATED.<br/>
+                                    Click to restart.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="w-full h-screen flex justify-center items-center bg-gray-900 font-sans overflow-hidden select-none">
+                    <div className={`relative w-full max-w-4xl h-full md:h-[600px] md:rounded-xl overflow-hidden shadow-2xl border-4 border-gray-800
+                        ${glitchActive ? 'animate-pulse filter contrast-150' : ''}
+                    `}>
+                        <div className={`absolute inset-0 transition-colors duration-1000 ${scene.background}`}>
+                            {scene.id === 'start' && <div className="absolute top-10 right-10 w-20 h-20 bg-yellow-300 rounded-full blur-xl opacity-50"></div>}
+                            {scene.id === 'glitch_event' && <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/diagmonds-light.png')] opacity-20"></div>}
+                        </div>
+
+                        {glitchActive && (
+                            <div className="absolute inset-0 z-20 bg-red-500 mix-blend-multiply opacity-20 pointer-events-none flex items-center justify-center">
+                                <h1 className="text-9xl font-black text-black opacity-30">ERROR</h1>
+                            </div>
+                        )}
+
+                        <div className="absolute inset-0 z-10 pointer-events-none">
+                            {currentLine && renderCharacter(currentLine.charImg || (scene.lines[lineIndex-1]?.charImg))}
+                        </div>
+
+                        {scene.type !== 'choice' && (
+                            <div 
+                                className="absolute bottom-0 w-full h-1/3 bg-gradient-to-t from-black via-black/80 to-transparent z-30 p-6 md:p-10 flex flex-col justify-end cursor-pointer hover:bg-black/90 transition-colors"
+                                onClick={handleNext}
+                            >
+                                {currentLine && (
+                                    <div className="flex items-center mb-2">
+                                        <div className={`px-4 py-1 rounded text-white font-bold tracking-widest text-lg
+                                            ${currentLine.speaker === '系统' ? 'bg-red-900 font-mono' : 'bg-indigo-600'}
+                                        `}>
+                                            {currentLine.speaker}
+                                        </div>
+                                        {isTyping && <div className="ml-3 w-2 h-2 bg-white rounded-full animate-bounce"></div>}
+                                    </div>
+                                )}
+
+                                <div className={`text-white text-lg md:text-xl leading-relaxed min-h-[4rem]
+                                    ${currentLine?.style === 'terminal' ? 'font-mono text-green-400' : ''}
+                                    ${currentLine?.style === 'hidden' ? 'text-gray-600 text-sm italic' : ''}
+                                `}>
+                                    {displayedText}
+                                    {!isTyping && <span className="inline-block w-2 h-5 bg-white ml-1 animate-pulse">|</span>}
+                                </div>
+
+                                <div className="absolute bottom-4 right-6 text-gray-500 text-xs flex items-center">
+                                    <RefreshCcw size={12} className="mr-1"/> 点击继续
+                                </div>
+                            </div>
+                        )}
+
+                        {scene.type === 'choice' && (
+                            <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+                                <h2 className="text-white text-2xl mb-8 font-bold tracking-wider text-center max-w-lg">
+                                    {scene.question}
+                                </h2>
+                                <div className="space-y-4 w-full max-w-md">
+                                    {scene.choices.map((choice, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => handleChoice(choice.nextScene)}
+                                            className={`w-full p-4 rounded-lg text-white font-bold text-lg transition-all transform hover:scale-105 active:scale-95 border-2
+                                                ${choice.style === 'blue' 
+                                                ? 'bg-blue-600 border-blue-400 hover:bg-blue-500 hover:shadow-[0_0_20px_rgba(59,130,246,0.5)]' 
+                                                : 'bg-red-600 border-red-400 hover:bg-red-500 hover:shadow-[0_0_20px_rgba(239,68,68,0.5)]'}
+                                            `}
+                                        >
+                                            {choice.text}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="absolute top-0 w-full p-4 flex justify-between items-center z-30 opacity-50 text-white text-xs font-mono">
+                            <div className="flex items-center gap-2">
+                                <Monitor size={14} /> 
+                                <span>BRAIN_VAT_OS_v2.4</span>
+                            </div>
+                            <div>
+                                SCENE_ID: {currentSceneId}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
